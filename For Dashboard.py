@@ -25,27 +25,17 @@ class PurePursuit(ThreadWithStop):
     
         self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
         self.planned_path_graph = self.graph.subgraph(self.planned_path)
-        self.visualize_map(self.planned_path_graph,"Planned")
+        # self.visualize_map(self.graph,"")
+        # self.visualize_map(self.planned_path_graph,"Planned")
         self.smoothed_path = self.smoothing(self.planned_path_positions, 0.1, 0.3, 0.001)
 
-        self.currentPos=None
+        self.currentPos=[15.477, -13.07]
         self.currentHeading = 0
         self.lastFoundIndex = 0
-        self.lookAheadDis = 0.20
+        self.lookAheadDis = 0.265
         self.using_rotation = False
-        self.numOfFrames = 400
         self.steeringAngle=0
-        self.fig = plt.figure()
-        self.trajectory_lines = plt.plot([], '-', color='orange', linewidth=4)
-        self.trajectory_line = self.trajectory_lines[0]
-        self.poses = plt.plot([], 'o', color='black', markersize=10)
-        self.pose = self.poses[0]
         self.currentIndex = 0
-        plt.plot(self.planned_path_positions[:, 0], self.planned_path_positions[:, 1], '--', color='grey')
-        plt.axis("scaled")
-        plt.xlim(-20, 20)
-        plt.ylim(-20, 20)
-        self.dt = 100
         self.xs = [self.planned_path_positions[0, 0]]
         self.ys = [self.planned_path_positions[0, 1]]
 
@@ -133,12 +123,14 @@ class PurePursuit(ThreadWithStop):
         currentY = self.currentPos[1]
         lastFoundIndex = LFindex
         foundIntersection = False
-
+        startingIndex = lastFoundIndex
+        if self.currentIndex >= len(path)-1:
+            self.currentIndex-=1
+        elif (path[self.currentIndex +1][0]-(self.lookAheadDis/2)< currentX <path[self.currentIndex +1][0]+(self.lookAheadDis/2)) and (path[self.currentIndex +1][1]-(self.lookAheadDis/2)< currentY <path[self.currentIndex +1][1]+(self.lookAheadDis/2)):
+            self.currentIndex +=1
         while foundIntersection == False:
             if self.currentIndex >= len(path)-1:
                self.currentIndex-=1
-            elif (path[self.currentIndex +1][0]-(self.lookAheadDis/2)< currentX <path[self.currentIndex +1][0]+(self.lookAheadDis/2)) and (path[self.currentIndex +1][1]-(self.lookAheadDis/2)< currentY <path[self.currentIndex +1][1]+(self.lookAheadDis/2)):
-                self.currentIndex +=1
             x1 = path[self.currentIndex][0] - currentX
             y1 = path[self.currentIndex][1] - currentY
             x2 = path[self.currentIndex + 1][0] - currentX
@@ -155,8 +147,6 @@ class PurePursuit(ThreadWithStop):
                 sol_y2 = (-D * dx - abs(dy) * np.sqrt(discriminant)) / dr ** 2
                 sol_pt1 = [sol_x1 + currentX, sol_y1 + currentY]
                 sol_pt2 = [sol_x2 + currentX, sol_y2 + currentY]
-
-
                 minX = min(path[self.currentIndex][0], path[self.currentIndex + 1][0])
                 minY = min(path[self.currentIndex][1], path[self.currentIndex + 1][1])
                 maxX = max(path[self.currentIndex][0], path[self.currentIndex + 1][0])
@@ -186,7 +176,6 @@ class PurePursuit(ThreadWithStop):
 
                     if self.pt_to_pt_distance(goalPt, path[self.currentIndex + 1]) < self.pt_to_pt_distance([currentX, currentY], path[self.currentIndex + 1]):
                         lastFoundIndex = self.currentIndex
-                        # self.currentIndex+=1
                         break
                     else:
                         lastFoundIndex = self.currentIndex + 1
@@ -194,24 +183,22 @@ class PurePursuit(ThreadWithStop):
                 else:
                     goalPt = [path[lastFoundIndex][0], path[lastFoundIndex][1]]
                     break
-
             else:
                 goalPt = [path[lastFoundIndex][0], path[lastFoundIndex][1]]
                 break
         condition = (self.currentIndex < len(path)-1)
-        print(f"target point:{goalPt}")
-        print(f"current index:{self.currentIndex}")
-        print(f"next path:{path[self.currentIndex + 1]}")
+
         if foundIntersection and (not condition ^ foundIntersection):
             absTargetAngle = math.atan2(goalPt[1] - self.currentPos[1], goalPt[0] - self.currentPos[0]) * 180 / np.pi
             if absTargetAngle < 0:
                 absTargetAngle += 360
             turnError = absTargetAngle - currentHeading
-          
             if turnError > 180 or turnError < -180:
                 turnError = -1 * self.sgn(turnError) * (360 - abs(turnError))
-            print(f"Turn error: {turnError}")
-            R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
+            if (turnError <0.01 and self.sgn(turnError) >0) or ((turnError >-0.01)and self.sgn(turnError)<0):
+                R  =  float('inf')
+            else:
+                R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
             steeringAngle = np.degrees((math.atan(0.265/R)))
             if steeringAngle >20:
                 steeringAngle =20
@@ -222,7 +209,7 @@ class PurePursuit(ThreadWithStop):
             else:
                 steeringAngle = steeringAngle
             self.steeringAngle=steeringAngle    
-            data2 = {"action": "speed", "value": 1}
+            data2 = {"action": "speed", "value": linearVel}
             self.pipeSend.send(data2)
             data2 = {"action": "steer", "value": steeringAngle}
             self.pipeSend.send(data2)    
@@ -235,7 +222,7 @@ class PurePursuit(ThreadWithStop):
                 steeringAngle = 0
                 goalPt = [self.currentPos[0], self.currentPos[1]]
                 lastFoundIndex = lastFoundIndex
-                data2 = {"action": "speed", "value": 2}
+                data2 = {"action": "speed", "value": linearVel}
                 self.pipeSend.send(data2)
                 data2 = {"action": "steer", "value": steeringAngle}
                 self.pipeSend.send(data2)
@@ -248,7 +235,10 @@ class PurePursuit(ThreadWithStop):
 
                 if turnError > 180 or turnError < -180:
                     turnError = -1 * self.sgn(turnError) * (360 - abs(turnError))
-                R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
+                if (turnError <0.01 and self.sgn(turnError) >0) or ((turnError >-0.01)and self.sgn(turnError)<0):
+                    R  =  float('inf')
+                else:
+                    R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
                 steeringAngle = np.degrees((math.atan(0.265/R)))
                 if steeringAngle >20:
                     steeringAngle =20
@@ -259,7 +249,7 @@ class PurePursuit(ThreadWithStop):
                 else:
                     steeringAngle = steeringAngle
                 self.steeringAngle=steeringAngle    
-                data2 = {"action": "speed", "value": 3}
+                data2 = {"action": "speed", "value": linearVel}
                 self.pipeSend.send(data2)
                 data2 = {"action": "steer", "value": steeringAngle}
                 self.pipeSend.send(data2)    
@@ -273,7 +263,7 @@ class PurePursuit(ThreadWithStop):
             self.steeringAngle = steeringAngle
             goalPt = [self.currentPos[0], self.currentPos[1]]
             lastFoundIndex = lastFoundIndex
-            data2 = {"action": "speed", "value": 4}
+            data2 = {"action": "speed", "value": 10}
             self.pipeSend.send(data2)
             data2 = {"action": "steer", "value": steeringAngle}
             self.pipeSend.send(data2)
@@ -291,8 +281,6 @@ class PurePursuit(ThreadWithStop):
             if msg["action"] == "location":
                 self.planned_path = msg["value"]
             self.currentPos=msg["value"]
-            print(self.currentPos)
-            #                       (v / L(cm))*t*tan(steeringAngle)
             self.currentHeading +=((10/(0.265)))*0.5*math.tan(np.radians(self.steeringAngle))#ackerman odometry
             print(self.currentHeading)
                 
@@ -302,18 +290,18 @@ if __name__ == "__main__":
     pipe3,pipe4=Pipe()
 # Define the file path to your GraphML file
     graph_file_path = 'Competition_track_graph.graphml'
-    start_node = "409"
-    goal_node = "408"
+    start_node = "424"
+    goal_node = "401"
     car_animation = PurePursuit(graph_file_path, start_node, goal_node,pipe2,pipe3)
     car_animation.start()
+    current_pos = [15.685, -9.7]
     currentHeading = 0
-    i =0 
-    current_pos = [ (15.46, -13.06),(15.84, -13.08),(16.21, -13.06),(16.59, -13.03),(16.91, -12.82),(17.09, -12.49),(17.1, -12.11),(17.09, -11.72),(17.09, -11.34),(17.1, -10.96),(17.08, -10.58),(17.06, -10.2),(16.81, -9.91),(16.46, -9.76),(16.08, -9.75),(15.7, -9.7),(15.46, -9.74),(15.3, -10.06),(15.3, -10.44),(15.31, -10.81),(15.31, -11.19),(15.31, -11.57),(15.31, -11.95),(15.32, -12.33),(15.33, -12.71) ]
-    while i <= len(current_pos)-1:
-        data = {"action": "location", "value":[current_pos[i][0],current_pos[i][1]]}
+    while True:
+        data = {"action": "location", "value":[current_pos[0],current_pos[1]]}
         pipe1.send(data)
         time.sleep(0.5)
-        i+=1
+        current_pos[0]+= 0
+        current_pos[1] +=0
         while pipe4.poll():
             data=pipe4.recv()
             print(data)
