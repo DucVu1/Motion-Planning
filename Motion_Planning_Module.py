@@ -25,27 +25,17 @@ class PurePursuit(ThreadWithStop):
     
         self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
         self.planned_path_graph = self.graph.subgraph(self.planned_path)
-        self.visualize_map(self.planned_path_graph,"Planned")
+        # self.visualize_map(self.graph,"")
+        # self.visualize_map(self.planned_path_graph,"Planned")
         self.smoothed_path = self.smoothing(self.planned_path_positions, 0.1, 0.3, 0.001)
 
         self.currentPos=[15.477, -13.07]
-        self.currentHeading = 0
+        self.currentHeading = 220
         self.lastFoundIndex = 0
         self.lookAheadDis = 0.265
         self.using_rotation = False
-        self.numOfFrames = 400
         self.steeringAngle=0
-        self.fig = plt.figure()
-        self.trajectory_lines = plt.plot([], '-', color='orange', linewidth=4)
-        self.trajectory_line = self.trajectory_lines[0]
-        self.poses = plt.plot([], 'o', color='black', markersize=10)
-        self.pose = self.poses[0]
         self.currentIndex = 0
-        plt.plot(self.planned_path_positions[:, 0], self.planned_path_positions[:, 1], '--', color='grey')
-        plt.axis("scaled")
-        plt.xlim(-20, 20)
-        plt.ylim(-20, 20)
-        self.dt = 100
         self.xs = [self.planned_path_positions[0, 0]]
         self.ys = [self.planned_path_positions[0, 1]]
 
@@ -154,8 +144,6 @@ class PurePursuit(ThreadWithStop):
                 sol_y2 = (-D * dx - abs(dy) * np.sqrt(discriminant)) / dr ** 2
                 sol_pt1 = [sol_x1 + currentX, sol_y1 + currentY]
                 sol_pt2 = [sol_x2 + currentX, sol_y2 + currentY]
-
-
                 minX = min(path[self.currentIndex][0], path[self.currentIndex + 1][0])
                 minY = min(path[self.currentIndex][1], path[self.currentIndex + 1][1])
                 maxX = max(path[self.currentIndex][0], path[self.currentIndex + 1][0])
@@ -193,11 +181,10 @@ class PurePursuit(ThreadWithStop):
                 else:
                     linearVel = 0  # cm/s
                     goalPt = [path[lastFoundIndex][0], path[lastFoundIndex][1]]
-                    break
-
             else:
                 linearVel = 0  # cm/s
                 goalPt = [path[lastFoundIndex][0], path[lastFoundIndex][1]]
+                break
         condition = (self.currentIndex < len(path)-1)
 
         if foundIntersection and (not condition ^ foundIntersection):
@@ -205,10 +192,12 @@ class PurePursuit(ThreadWithStop):
             if absTargetAngle < 0:
                 absTargetAngle += 360
             turnError = absTargetAngle - currentHeading
-
             if turnError > 180 or turnError < -180:
                 turnError = -1 * self.sgn(turnError) * (360 - abs(turnError))
-            R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
+            if (turnError <0.01 and self.sgn(turnError) >0) or ((turnError >-0.01)and self.sgn(turnError)<0):
+                R  =  float('inf')
+            else:
+                R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
             steeringAngle = np.degrees((math.atan(0.265/R)))
             if steeringAngle >20:
                 steeringAngle =20
@@ -245,7 +234,10 @@ class PurePursuit(ThreadWithStop):
 
                 if turnError > 180 or turnError < -180:
                     turnError = -1 * self.sgn(turnError) * (360 - abs(turnError))
-                R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
+                if (turnError <0.01 and self.sgn(turnError) >0) or ((turnError >-0.01)and self.sgn(turnError)<0):
+                    R  =  float('inf')
+                else:
+                    R = (self.lookAheadDis/2)/ math.sin(np.radians(turnError))
                 steeringAngle = np.degrees((math.atan(0.265/R)))
                 if steeringAngle >20:
                     steeringAngle =20
@@ -297,17 +289,17 @@ if __name__ == "__main__":
     pipe3,pipe4=Pipe()
 # Define the file path to your GraphML file
     graph_file_path = 'Competition_track_graph.graphml'
-    start_node = "409"
-    goal_node = "400"
+    start_node = "424"
+    goal_node = "401"
     car_animation = PurePursuit(graph_file_path, start_node, goal_node,pipe2,pipe3)
     car_animation.start()
-    current_pos = [15.477, -13.07]
+    current_pos = [15.685, -9.7]
     currentHeading = 0
     while True:
         data = {"action": "location", "value":[current_pos[0],current_pos[1]]}
         pipe1.send(data)
         time.sleep(0.5)
-        current_pos[0]+= 0.01
+        current_pos[0]+= 0
         current_pos[1] +=0
         while pipe4.poll():
             data=pipe4.recv()
