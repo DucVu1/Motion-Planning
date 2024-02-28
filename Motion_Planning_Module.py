@@ -22,7 +22,6 @@ class PurePursuit(ThreadWithStop):
         self.start_node = start_node
         self.goal_node = goal_node
         self.planned_path = nx.shortest_path(self.graph, source=start_node, target=goal_node)
-    
         self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
         self.planned_path_graph = self.graph.subgraph(self.planned_path)
         self.visualize_map(self.planned_path_graph,"Planned")
@@ -103,7 +102,18 @@ class PurePursuit(ThreadWithStop):
         plt.title(title)
         plt.axis('off')  # Turn off the axis
         plt.show()
-      
+    def find_closest_node(self,graph, current_position):
+        closest_node = None
+        min_distance = float('inf')
+
+        for node in graph.nodes():
+            node_position = graph.nodes[node]['pos']  # Assuming 'pos' is the node attribute storing positions
+            distance = np.linalg.norm(np.array(node_position) - np.array(current_position))
+            if distance < min_distance:
+                min_distance = distance
+                closest_node = node
+
+        return closest_node
     def smoothing(self, path, weight_data, weight_smooth, tolerance):
         smoothed_path = path.copy()
         change = tolerance
@@ -289,8 +299,11 @@ class PurePursuit(ThreadWithStop):
         if self.pipeRecv.poll():
             msg = self.pipeRecv.recv()
             if msg["action"] == "location":
-                self.planned_path = msg["value"]
-            self.currentPos=msg["value"]
+                self.currentPos=msg["value"]
+            if self.currentIndex ==0 and (self.currentPos[0] < self.planned_path_positions[0][0]) and (self.currentPos[1] > self.planned_path_positions[0][1]):
+                new_position = self.find_closest_node(self.graph,self.currentPos)
+                self.planned_path = nx.shortest_path(self.graph, source=new_position, target=self.goal_node)
+                self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
             print(self.currentPos)
             #                       (v / L(cm))*t*tan(steeringAngle)
             self.currentHeading +=((10/(0.265)))*0.5*math.tan(np.radians(self.steeringAngle))#ackerman odometry
@@ -307,13 +320,13 @@ if __name__ == "__main__":
     car_animation = PurePursuit(graph_file_path, start_node, goal_node,pipe2,pipe3)
     car_animation.start()
     currentHeading = 0
-    i =0 
-    current_pos = [ (15.46, -13.06),(15.84, -13.08),(16.21, -13.06),(16.59, -13.03),(16.91, -12.82),(17.09, -12.49),(17.1, -12.11),(17.09, -11.72),(17.09, -11.34),(17.1, -10.96),(17.08, -10.58),(17.06, -10.2),(16.81, -9.91),(16.46, -9.76),(16.08, -9.75),(15.7, -9.7),(15.46, -9.74),(15.3, -10.06),(15.3, -10.44),(15.31, -10.81),(15.31, -11.19),(15.31, -11.57),(15.31, -11.95),(15.32, -12.33),(15.33, -12.71) ]
-    while i <= len(current_pos)-1:
+    i = 0
+    current_pos =[(15.22,-13.04) ,(15.46, -13.06),(15.84, -13.08),(16.21, -13.06),(16.59, -13.03),(16.91, -12.82),(17.09, -12.49),(17.1, -12.11),(17.09, -11.72),(17.09, -11.34),(17.1, -10.96),(17.08, -10.58),(17.06, -10.2),(16.81, -9.91),(16.46, -9.76),(16.08, -9.75),(15.7, -9.7),(15.46, -9.74),(15.3, -10.06),(15.3, -10.44),(15.31, -10.81),(15.31, -11.19),(15.31, -11.57),(15.31, -11.95),(15.32, -12.33),(15.33, -12.71) ]
+    while i<len(current_pos)-1:
         data = {"action": "location", "value":[current_pos[i][0],current_pos[i][1]]}
         pipe1.send(data)
-        time.sleep(0.5)
         i+=1
+        time.sleep(0.5)
         while pipe4.poll():
             data=pipe4.recv()
             print(data)
