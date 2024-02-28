@@ -26,30 +26,13 @@ class PurePursuit(ThreadWithStop):
         self.planned_path_graph = self.graph.subgraph(self.planned_path)
         self.visualize_map(self.planned_path_graph,"Planned")
         self.smoothed_path = self.smoothing(self.planned_path_positions, 0.1, 0.3, 0.001)
-
         self.currentPos=None
         self.currentHeading = 0
         self.lastFoundIndex = 0
         self.lookAheadDis = 0.20
         self.using_rotation = False
-        self.numOfFrames = 400
-        self.steeringAngle=0
-        self.fig = plt.figure()
-        self.trajectory_lines = plt.plot([], '-', color='orange', linewidth=4)
-        self.trajectory_line = self.trajectory_lines[0]
-        self.poses = plt.plot([], 'o', color='black', markersize=10)
-        self.pose = self.poses[0]
+        self.steeringAngle=None
         self.currentIndex = 0
-        plt.plot(self.planned_path_positions[:, 0], self.planned_path_positions[:, 1], '--', color='grey')
-        plt.axis("scaled")
-        plt.xlim(-20, 20)
-        plt.ylim(-20, 20)
-        self.dt = 100
-        self.xs = [self.planned_path_positions[0, 0]]
-        self.ys = [self.planned_path_positions[0, 1]]
-
-        
-
     def parse_graphml(self, file_path):
         tree = ET.parse(file_path)
         root = tree.getroot()
@@ -112,7 +95,6 @@ class PurePursuit(ThreadWithStop):
             if distance < min_distance:
                 min_distance = distance
                 closest_node = node
-
         return closest_node
     def smoothing(self, path, weight_data, weight_smooth, tolerance):
         smoothed_path = path.copy()

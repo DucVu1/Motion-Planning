@@ -22,25 +22,18 @@ class PurePursuit(ThreadWithStop):
         self.start_node = start_node
         self.goal_node = goal_node
         self.planned_path = nx.shortest_path(self.graph, source=start_node, target=goal_node)
-    
         self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
         self.planned_path_graph = self.graph.subgraph(self.planned_path)
         # self.visualize_map(self.graph,"")
         # self.visualize_map(self.planned_path_graph,"Planned")
         self.smoothed_path = self.smoothing(self.planned_path_positions, 0.1, 0.3, 0.001)
-
-        self.currentPos=[15.477, -13.07]
+        self.currentPos=None
         self.currentHeading = 0
         self.lastFoundIndex = 0
         self.lookAheadDis = 0.265
         self.using_rotation = False
-        self.steeringAngle=0
+        self.steeringAngle=None
         self.currentIndex = 0
-        self.xs = [self.planned_path_positions[0, 0]]
-        self.ys = [self.planned_path_positions[0, 1]]
-
-        
-
     def parse_graphml(self, file_path):
         tree = ET.parse(file_path)
         root = tree.getroot()
@@ -93,7 +86,17 @@ class PurePursuit(ThreadWithStop):
         plt.title(title)
         plt.axis('off')  # Turn off the axis
         plt.show()
-      
+    def find_closest_node(self,graph, current_position):
+        closest_node = None
+        min_distance = float('inf')
+
+        for node in graph.nodes():
+            node_position = graph.nodes[node]['pos']  # Assuming 'pos' is the node attribute storing positions
+            distance = np.linalg.norm(np.array(node_position) - np.array(current_position))
+            if distance < min_distance:
+                min_distance = distance
+                closest_node = node
+        return closest_node
     def smoothing(self, path, weight_data, weight_smooth, tolerance):
         smoothed_path = path.copy()
         change = tolerance
@@ -163,17 +166,13 @@ class PurePursuit(ThreadWithStop):
                         else:
                             goalPt = sol_pt2
                             foundIntersection = True
-
                     else:
                         if (minX <= sol_pt1[0] <= maxX) and (minY <= sol_pt1[1] <= maxY):
                             goalPt = sol_pt1
                             foundIntersection = True
-    
                         else:
                             goalPt = sol_pt2
-                            foundIntersection = True
-            
-
+                            foundIntersection = True            
                     if self.pt_to_pt_distance(goalPt, path[self.currentIndex + 1]) < self.pt_to_pt_distance([currentX, currentY], path[self.currentIndex + 1]):
                         lastFoundIndex = self.currentIndex
                         break
@@ -187,7 +186,6 @@ class PurePursuit(ThreadWithStop):
                 goalPt = [path[lastFoundIndex][0], path[lastFoundIndex][1]]
                 break
         condition = (self.currentIndex < len(path)-1)
-
         if foundIntersection and (not condition ^ foundIntersection):
             absTargetAngle = math.atan2(goalPt[1] - self.currentPos[1], goalPt[0] - self.currentPos[0]) * 180 / np.pi
             if absTargetAngle < 0:
@@ -279,8 +277,13 @@ class PurePursuit(ThreadWithStop):
         if self.pipeRecv.poll():
             msg = self.pipeRecv.recv()
             if msg["action"] == "location":
-                self.planned_path = msg["value"]
-            self.currentPos=msg["value"]
+                self.currentPos=msg["value"]
+            if self.currentIndex ==0 and (self.currentPos[0] < self.planned_path_positions[0][0]) and (self.currentPos[1] > self.planned_path_positions[0][1]):
+                new_position = self.find_closest_node(self.graph,self.currentPos)
+                self.planned_path = nx.shortest_path(self.graph, source=new_position, target=self.goal_node)
+                self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
+            print(self.currentPos)
+            #                       (v / L(cm))*t*tan(steeringAngle)
             self.currentHeading +=((10/(0.265)))*0.5*math.tan(np.radians(self.steeringAngle))#ackerman odometry
             print(self.currentHeading)
                 
