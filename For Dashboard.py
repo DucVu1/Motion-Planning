@@ -13,8 +13,7 @@ import time
 class PurePursuit(ThreadWithStop):
     def __init__(self, graph_file_path, start_node, goal_node,pipeRecv,pipeSend):
         
-        self.linear_vel=10
-        self.steer_angle=None
+        self.linear_vel = None
         self.pipeRecv=pipeRecv
         self.pipeSend=pipeSend
         super(PurePursuit, self).__init__()
@@ -32,7 +31,7 @@ class PurePursuit(ThreadWithStop):
         self.lastFoundIndex = 0
         self.lookAheadDis = 0.265
         self.using_rotation = False
-        self.steeringAngle=None
+        self.steeringAngle=0
         self.currentIndex = 0
     def parse_graphml(self, file_path):
         tree = ET.parse(file_path)
@@ -126,14 +125,11 @@ class PurePursuit(ThreadWithStop):
         currentY = self.currentPos[1]
         lastFoundIndex = LFindex
         foundIntersection = False
-        startingIndex = lastFoundIndex
         if self.currentIndex >= len(path)-1:
             self.currentIndex-=1
         elif (path[self.currentIndex +1][0]-(self.lookAheadDis/2)< currentX <path[self.currentIndex +1][0]+(self.lookAheadDis/2)) and (path[self.currentIndex +1][1]-(self.lookAheadDis/2)< currentY <path[self.currentIndex +1][1]+(self.lookAheadDis/2)):
             self.currentIndex +=1
         while foundIntersection == False:
-            if self.currentIndex >= len(path)-1:
-               self.currentIndex-=1
             x1 = path[self.currentIndex][0] - currentX
             y1 = path[self.currentIndex][1] - currentY
             x2 = path[self.currentIndex + 1][0] - currentX
@@ -283,6 +279,7 @@ class PurePursuit(ThreadWithStop):
                 self.planned_path = nx.shortest_path(self.graph, source=new_position, target=self.goal_node)
                 self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
             print(self.currentPos)
+
             #                       (v / L(cm))*t*tan(steeringAngle)
             self.currentHeading +=((10/(0.265)))*0.5*math.tan(np.radians(self.steeringAngle))#ackerman odometry
             print(self.currentHeading)
@@ -293,18 +290,16 @@ if __name__ == "__main__":
     pipe3,pipe4=Pipe()
 # Define the file path to your GraphML file
     graph_file_path = 'Competition_track_graph.graphml'
-    start_node = "424"
-    goal_node = "401"
+    start_node = "409"
+    goal_node = "408"
     car_animation = PurePursuit(graph_file_path, start_node, goal_node,pipe2,pipe3)
     car_animation.start()
-    current_pos = [15.685, -9.7]
+    current_pos = [15.46, -13.06]
     currentHeading = 0
-    while True:
+while True:
         data = {"action": "location", "value":[current_pos[0],current_pos[1]]}
         pipe1.send(data)
         time.sleep(0.5)
-        current_pos[0]+= 0
-        current_pos[1] +=0
         while pipe4.poll():
             data=pipe4.recv()
             print(data)

@@ -14,7 +14,6 @@ class PurePursuit(ThreadWithStop):
     def __init__(self, graph_file_path, start_node, goal_node,pipeRecv,pipeSend):
         
         self.linear_vel=10
-        self.steer_angle=None
         self.pipeRecv=pipeRecv
         self.pipeSend=pipeSend
         super(PurePursuit, self).__init__()
@@ -31,7 +30,7 @@ class PurePursuit(ThreadWithStop):
         self.lastFoundIndex = 0
         self.lookAheadDis = 0.20
         self.using_rotation = False
-        self.steeringAngle=None
+        self.steeringAngle=0
         self.currentIndex = 0
     def parse_graphml(self, file_path):
         tree = ET.parse(file_path)
@@ -125,7 +124,6 @@ class PurePursuit(ThreadWithStop):
         currentY = self.currentPos[1]
         lastFoundIndex = LFindex
         foundIntersection = False
-
         while foundIntersection == False:
             if self.currentIndex >= len(path)-1:
                self.currentIndex-=1
@@ -282,11 +280,13 @@ class PurePursuit(ThreadWithStop):
             msg = self.pipeRecv.recv()
             if msg["action"] == "location":
                 self.currentPos=msg["value"]
-            if self.currentIndex ==0 and (self.currentPos[0] < self.planned_path_positions[0][0]) and (self.currentPos[1] > self.planned_path_positions[0][1]):
+            conditon_to_test = self.planned_path_positions[0][0] -0.05< self.currentPos[0] < self.planned_path_positions[0][0] and ( self.planned_path_positions[0][1] -0.05< self.currentPos[1] < self.planned_path_positions[0][1]+0.05)
+            if self.currentIndex == 0 and not conditon_to_test:
                 new_position = self.find_closest_node(self.graph,self.currentPos)
                 self.planned_path = nx.shortest_path(self.graph, source=new_position, target=self.goal_node)
                 self.planned_path_positions = np.array([self.graph.nodes[node]['pos'] for node in self.planned_path])
             print(self.currentPos)
+            print(self.planned_path)
             #                       (v / L(cm))*t*tan(steeringAngle)
             self.currentHeading +=((10/(0.265)))*0.5*math.tan(np.radians(self.steeringAngle))#ackerman odometry
             print(self.currentHeading)
@@ -303,11 +303,11 @@ if __name__ == "__main__":
     car_animation.start()
     currentHeading = 0
     i = 0
-    current_pos =[(15.22,-13.04) ,(15.46, -13.06),(15.84, -13.08),(16.21, -13.06),(16.59, -13.03),(16.91, -12.82),(17.09, -12.49),(17.1, -12.11),(17.09, -11.72),(17.09, -11.34),(17.1, -10.96),(17.08, -10.58),(17.06, -10.2),(16.81, -9.91),(16.46, -9.76),(16.08, -9.75),(15.7, -9.7),(15.46, -9.74),(15.3, -10.06),(15.3, -10.44),(15.31, -10.81),(15.31, -11.19),(15.31, -11.57),(15.31, -11.95),(15.32, -12.33),(15.33, -12.71) ]
-    while i<len(current_pos)-1:
+    current_pos =[ (15.2,-13.04),(15.46, -13.06),(15.84, -13.08),(16.21, -13.06),(16.59, -13.03),(16.91, -12.82),(17.09, -12.49),(17.1, -12.11),(17.09, -11.72),(17.09, -11.34),(17.1, -10.96),(17.08, -10.58),(17.06, -10.2),(16.81, -9.91),(16.46, -9.76),(16.08, -9.75),(15.7, -9.7),(15.46, -9.74),(15.3, -10.06),(15.3, -10.44),(15.31, -10.81),(15.31, -11.19),(15.31, -11.57),(15.31, -11.95),(15.32, -12.33),(15.33, -12.71) ]
+    while i < len(current_pos)-1:
         data = {"action": "location", "value":[current_pos[i][0],current_pos[i][1]]}
         pipe1.send(data)
-        i+=1
+        i += 1
         time.sleep(0.5)
         while pipe4.poll():
             data=pipe4.recv()
